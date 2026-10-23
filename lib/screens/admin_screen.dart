@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:delivery_app/components/widgets/login_required_state.dart';
 import 'package:delivery_app/providers/user_provider.dart';
 import 'package:delivery_app/theme/app_theme.dart';
+import 'package:delivery_app/services/delivery_zone_service.dart';
+import 'package:delivery_app/services/postal_code_service.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -13,6 +15,11 @@ class AdminScreen extends StatefulWidget {
 
 class _AdminScreenState extends State<AdminScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _zoneService = DeliveryZoneService();
+  final _cpService = PostalCodeService();
+  List<String> _colonias = [];
+  bool _cpNoEncontrado = false;
+  bool _cpInicializado = false;
 
   // Controladores para el formulario
   final TextEditingController nombreController = TextEditingController();
@@ -85,6 +92,38 @@ class _AdminScreenState extends State<AdminScreen> {
     }
   }
 
+  Future<void> _onCpChanged(String value) async {
+    final cp = value.trim();
+
+    // Mientras no haya 5 dígitos, volvemos al campo libre
+    if (cp.length != 5) {
+      if (_colonias.isNotEmpty || _cpNoEncontrado) {
+        setState(() {
+          _colonias = [];
+          _cpNoEncontrado = false;
+        });
+      }
+      return;
+    }
+
+    final info = await _cpService.lookup(cp);
+    if (!mounted || cpController.text.trim() != cp) return;
+
+    setState(() {
+      if (info == null) {
+        _colonias = [];
+        _cpNoEncontrado = true;
+        return;
+      }
+      _cpNoEncontrado = false;
+      _colonias = info.colonias;
+      ciudadController.text = info.ciudad;
+      if (!_colonias.contains(coloniaController.text)) {
+        coloniaController.text = _colonias.length == 1 ? _colonias.first : '';
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     // Escuchamos de forma activa al UserProvider
@@ -94,7 +133,8 @@ class _AdminScreenState extends State<AdminScreen> {
     if (userProvider.isGuest) {
       return const LoginRequiredState(
         title: 'Inicia sesión para gestionar tus datos',
-        message: 'Aquí podrás guardar tu nombre, teléfono y dirección de envío.',
+        message:
+            'Aquí podrás guardar tu nombre, teléfono y dirección de envío.',
       );
     }
 
@@ -105,6 +145,13 @@ class _AdminScreenState extends State<AdminScreen> {
 
     // Llenamos los formularios con lo que tenga el Provider (si es que tiene)
     _rellenarControladores(userProvider.userData);
+
+    if (!_cpInicializado && cpController.text.trim().length == 5) {
+      _cpInicializado = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _onCpChanged(cpController.text);
+      });
+    }
 
     return Form(
       key: _formKey,
@@ -177,18 +224,22 @@ class _AdminScreenState extends State<AdminScreen> {
                       'C.P.',
                       cpController,
                       keyboardType: TextInputType.number,
+                      maxLength: 5,
+                      onChanged: _onCpChanged,
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildProfileField(
-                      Icons.location_city_outlined,
-                      'Colonia',
-                      coloniaController,
-                    ),
-                  ),
+                  Expanded(child: _buildColoniaField()),
                 ],
               ),
+              if (_cpNoEncontrado)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 6),
+                  child: Text(
+                    'Este C.P. no está en nuestra zona de cobertura. Puedes capturar la colonia a mano.',
+                    style: TextStyle(color: AppColors.danger, fontSize: 12),
+                  ),
+                ),
               _buildProfileField(
                 Icons.map_outlined,
                 'Ciudad',
@@ -203,34 +254,63 @@ class _AdminScreenState extends State<AdminScreen> {
           FilledButton.icon(
             onPressed: () async {
               if (_formKey.currentState!.validate()) {
-                // Preparamos el mapa de datos recopilados de la UI
+                final direccion = <String, dynamic>{
+                  'calle': calleController.text.trim(),
+                  'numero_exterior': numExtController.text.trim(),
+                  'numero_interior': numIntController.text.trim(),
+                  'codigo_postal': cpController.text.trim(),
+                  'colonia': coloniaController.text.trim(),
+                  'ciudad': ciudadController.text.trim(),
+                };
+
+                // Ubicamos la dirección y revisamos la zona de reparto
+                DeliveryZoneResult? zona;
+                try {
+                  zona = await _zoneService.checkAddress(direccion);
+                } catch (_) {
+                  zona =
+                      null; // sin red o sin config: guardamos sin coordenadas
+                }
+                direccion['lat'] = zona?.lat;
+                direccion['lng'] = zona?.lng;
+
                 final datosAActualizar = {
                   'nombre': nombreController.text.trim(),
                   'apellido': apellidoController.text.trim(),
                   'telefono': telefonoController.text.trim(),
-                  'direccion': {
-                    'calle': calleController.text.trim(),
-                    'numero_exterior': numExtController.text.trim(),
-                    'numero_interior': numIntController.text.trim(),
-                    'codigo_postal': cpController.text.trim(),
-                    'colonia': coloniaController.text.trim(),
-                    'ciudad': ciudadController.text.trim(),
-                  },
+                  'direccion': direccion,
                 };
 
-                // Despachamos la actualización mediante el provider
                 bool guardadoConExito = await userProvider.updateUserData(
                   datosAActualizar,
                 );
 
                 if (context.mounted) {
-                  showAppSnackBar(
-                    context,
-                    guardadoConExito
-                        ? 'Datos actualizados correctamente'
-                        : 'Error al guardar los datos',
-                    kind: guardadoConExito ? SnackKind.success : SnackKind.error,
-                  );
+                  if (!guardadoConExito) {
+                    showAppSnackBar(
+                      context,
+                      'Error al guardar los datos',
+                      kind: SnackKind.error,
+                    );
+                  } else if (zona == null) {
+                    showAppSnackBar(
+                      context,
+                      'Datos guardados, pero no pudimos ubicar tu dirección. Revisa calle, colonia y C.P.',
+                      kind: SnackKind.info,
+                    );
+                  } else if (!zona.inside) {
+                    showAppSnackBar(
+                      context,
+                      'Datos guardados, pero tu dirección queda fuera de nuestra zona de reparto (${zona.distanceKm.toStringAsFixed(1)} km).',
+                      kind: SnackKind.error,
+                    );
+                  } else {
+                    showAppSnackBar(
+                      context,
+                      'Datos actualizados correctamente',
+                      kind: SnackKind.success,
+                    );
+                  }
                 }
               }
             },
@@ -290,16 +370,21 @@ class _AdminScreenState extends State<AdminScreen> {
     TextEditingController controller, {
     TextInputType keyboardType = TextInputType.text,
     bool isRequired = true,
+    int? maxLength,
+    ValueChanged<String>? onChanged,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: TextFormField(
         controller: controller,
         keyboardType: keyboardType,
+        maxLength: maxLength,
+        onChanged: onChanged,
         textInputAction: TextInputAction.next,
         decoration: InputDecoration(
           labelText: label,
           prefixIcon: Icon(icon),
+          counterText: "",
         ),
         validator: (value) {
           if (isRequired && (value == null || value.trim().isEmpty)) {
@@ -307,6 +392,41 @@ class _AdminScreenState extends State<AdminScreen> {
           }
           return null;
         },
+      ),
+    );
+  }
+
+  Widget _buildColoniaField() {
+    // Sin C.P. válido en el catálogo: campo de texto libre
+    if (_colonias.isEmpty) {
+      return _buildProfileField(
+        Icons.location_city_outlined,
+        'Colonia',
+        coloniaController,
+      );
+    }
+
+    final actual = coloniaController.text;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      child: DropdownButtonFormField<String>(
+        key: ValueKey('colonia_${cpController.text}_${_colonias.length}'),
+        initialValue: _colonias.contains(actual) ? actual : null,
+        isExpanded: true,
+        decoration: const InputDecoration(
+          labelText: 'Colonia',
+          prefixIcon: Icon(Icons.location_city_outlined),
+        ),
+        items: _colonias
+            .map(
+              (c) => DropdownMenuItem(
+                value: c,
+                child: Text(c, overflow: TextOverflow.ellipsis),
+              ),
+            )
+            .toList(),
+        onChanged: (v) => coloniaController.text = v ?? '',
+        validator: (v) => (v == null || v.isEmpty) ? 'Obligatorio' : null,
       ),
     );
   }
@@ -439,7 +559,9 @@ class _AdminScreenState extends State<AdminScreen> {
               child: const Text('Cancelar'),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.danger,
+              ),
               onPressed: () async {
                 if (!deleteFormKey.currentState!.validate()) return;
 
@@ -477,7 +599,6 @@ class _AdminScreenState extends State<AdminScreen> {
     );
   }
 }
-
 
 class _FormSection extends StatelessWidget {
   final String title;

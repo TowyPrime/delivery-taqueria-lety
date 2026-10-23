@@ -8,11 +8,73 @@ import 'package:delivery_app/components/item_cart.dart';
 import '../providers/cart_provider.dart';
 import '../providers/auth_provider.dart';
 import 'login_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:delivery_app/services/delivery_zone_service.dart';
 
 class CartScreen extends StatelessWidget {
   final VoidCallback? onGoToMenu;
 
   const CartScreen({super.key, this.onGoToMenu});
+
+  //Verificar si el usuario tiene una dirección dentro de la zona de reparto
+  Future<bool> _checkDeliveryZone(BuildContext context) async {
+    final uid = Provider.of<AppAuthProvider>(context, listen: false).user?.uid;
+    if (uid == null) return false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    String? problema;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+      final dir = snap.data()?['direccion'] as Map<String, dynamic>?;
+      final lat = (dir?['lat'] as num).toDouble();
+      final lng = (dir?['lng'] as num).toDouble();
+
+      if (dir == null || (dir['calle'] ?? '').toString().trim().isEmpty) {
+        problema =
+            'Aún no tienes una dirección de envío. Agrégala en "Mis datos" para poder pedir.';
+      } else if (lat == null || lng == null) {
+        problema =
+            'No pudimos ubicar tu dirección. Revísala en "Mis datos" (calle, colonia y C.P.) y guárdala de nuevo.';
+      } else {
+        final zona = await DeliveryZoneService().checkCoordinates(lat, lng);
+        if (!zona.inside) {
+          problema =
+              'Tu dirección queda a ${zona.distanceKm.toStringAsFixed(1)} km de la taquería, fuera de nuestra zona de reparto.';
+        }
+      }
+    } catch (_) {
+      problema =
+          'No pudimos verificar tu zona de reparto. Revisa tu conexión e intenta de nuevo.';
+    }
+
+    if (context.mounted) Navigator.pop(context);
+    if (problema == null) return true;
+
+    if (context.mounted) {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('No podemos hacer el envío'),
+          content: Text(problema!),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Entendido'),
+            ),
+          ],
+        ),
+      );
+    }
+    return false;
+  }
 
   Future<void> _processStripePayment(
     BuildContext context,

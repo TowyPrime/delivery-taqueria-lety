@@ -2,8 +2,72 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:delivery_app/components/widgets/announcement_card.dart';
 
+class _SeassonStyle {
+  final Color? baseColor;
+  final List<Color> borderColors;
+
+  final bool stripes;
+
+  const _SeassonStyle({
+    this.baseColor,
+    required this.borderColors,
+    this.stripes = false,
+  });
+}
+
 class DynamicAnnouncementBanner extends StatelessWidget {
-  const DynamicAnnouncementBanner({super.key});
+  final int? month;
+  const DynamicAnnouncementBanner({super.key, this.month});
+
+  //Meses con decoraci+on especial
+  static const Map<int, _SeassonStyle> _seassons = {
+    //Septiembre
+    9: _SeassonStyle(
+      borderColors: [Color(0xFF006341), Colors.white, Color(0xFFCE1126)],
+      stripes: true,
+    ),
+
+    //Octubre
+    10: _SeassonStyle(
+      baseColor: Color(0xFFE65100),
+      borderColors: [Color(0xFFFF6D00), Color(0xFF6A1B9A), Color(0xFF212121)],
+    ),
+
+    //Noviembre
+    11: _SeassonStyle(
+      baseColor: Color(0xFFF57C00),
+      borderColors: [Color(0xFFFF9800), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+    ),
+
+    //Diciembre
+    12: _SeassonStyle(
+      baseColor: Color(0xFFC62828),
+      borderColors: [Color(0xFFC62828), Color(0xFF1B5E20), Color(0xFFFFC107)],
+    ),
+  };
+
+  LinearGradient _borderGradient(_SeassonStyle style) {
+    if (style.stripes) {
+      return LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: style.borderColors,
+      );
+    }
+    // Cada color ocupa 1/n del borde con corte seco.
+    final int n = style.borderColors.length;
+    final List<Color> colors = [];
+    final List<double> stops = [];
+    for (var i = 0; i < n; i++) {
+      colors
+        ..add(style.borderColors[i])
+        ..add(style.borderColors[i]);
+      stops
+        ..add(i / n)
+        ..add((i + 1) / n);
+    }
+    return LinearGradient(colors: colors, stops: stops);
+  }
 
   // Mapeo del color base
   Color _getColor(String? key) {
@@ -53,8 +117,7 @@ class DynamicAnnouncementBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final String announcementDocId = 'il1RmwlalbBYyX7SIrBP';
 
-    // Verificamos si el mes actual es septiembre
-    final bool isSeptember = DateTime.now().month == 9;
+    final _SeassonStyle? season = _seassons[month ?? DateTime.now().month];
 
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
@@ -76,57 +139,39 @@ class DynamicAnnouncementBanner extends StatelessWidget {
         final String subtitle = data['subtitle'] ?? '';
 
         if (title.isEmpty && subtitle.isEmpty) {
-          return const SizedBox.shrink();
+          return SizedBox.shrink();
         }
 
-        // Si es septiembre, usamos un contenedor con borde tricolor
-        if (isSeptember) {
+        final Widget card = AnnouncementCard(
+          title: title,
+          subtitle: subtitle,
+          margin: EdgeInsets.zero,
+          baseColor: season?.baseColor ?? _getColor(data['color'] as String?),
+          icon: _getIcon(data['iconName'] as String?),
+        );
+
+        if (season == null) {
           return Padding(
             padding: const EdgeInsets.only(bottom: 20.0),
-            child: Container(
-              // Usamos un BoxDecoration para crear el borde tricolor (Bandera de México)
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(
-                  19.0,
-                ), // 16 de la tarjeta + 3 del grosor del borde
-                gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFF006341), // Verde bandera
-                    Colors.white, // Blanco
-                    Color(0xFFCE1126), // Rojo bandera
-                  ],
-                  stops: [0.33, 0.33, 0.66], // Distribución de los colores
-                ),
-              ),
-              padding: const EdgeInsets.all(3.0), // Grosor del borde tricolor
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(
-                    context,
-                  ).scaffoldBackgroundColor, // Fondo interno para que no tape el diseño de la tarjeta
-                  borderRadius: BorderRadius.circular(16.0),
-                ),
-                child: AnnouncementCard(
-                  title: title,
-                  subtitle: subtitle,
-                  margin: EdgeInsets.zero,
-                  baseColor: _getColor(data['color'] as String?),
-                  icon: _getIcon(data['iconName'] as String?),
-                ),
-              ),
-            ),
+            child: card,
           );
         }
 
-        // Comportamiento normal para el resto del año
         return Padding(
           padding: const EdgeInsets.only(bottom: 20.0),
-          child: AnnouncementCard(
-            title: title,
-            subtitle: subtitle,
-            margin: EdgeInsets.zero,
-            baseColor: _getColor(data['color'] as String?),
-            icon: _getIcon(data['iconName'] as String?),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(19.0),
+              gradient: _borderGradient(season),
+            ),
+            padding: const EdgeInsets.all(3.0),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                borderRadius: BorderRadius.circular(16.0),
+              ),
+              child: card,
+            ),
           ),
         );
       },

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class GoogleAuthService {
   GoogleAuthService._();
@@ -15,7 +16,9 @@ class GoogleAuthService {
   static Future<void> initialize() async {
     if (_initialized) return;
 
-    await _googleSignIn.initialize();
+    await _googleSignIn.initialize(
+      serverClientId: dotenv.env['GOOGLE_SERVER_CLIENT_ID'],
+    );
 
     _authSubscription = _googleSignIn.authenticationEvents.listen(
       _handleAuthenticationEvent,

@@ -52,21 +52,21 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyAc-wr1uucUQZQr32KYgxonqihs-8-qGgI',
-    appId: '1:542906319053:android:2312dba0e165d9cb442984',
+    appId: '1:542906319053:android:f2c94781f74c0eeb442984',
     messagingSenderId: '542906319053',
     projectId: 'deliveryapp-42127',
     storageBucket: 'deliveryapp-42127.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyDDokk4JalktXtD76icFXy8lUOJGB9UoFE',
-    appId: '1:542906319053:ios:796bd9068a11071e442984',
+    appId: '1:542906319053:ios:715f6ba6449b68d8442984',
     messagingSenderId: '542906319053',
     projectId: 'deliveryapp-42127',
     storageBucket: 'deliveryapp-42127.firebasestorage.app',
-    iosBundleId: 'com.example.deliveryApp',
+    androidClientId: '542906319053-i7gkn6fhr47fes3tdeg8v8fkvoh0jf0v.apps.googleusercontent.com',
+    iosClientId: '542906319053-0pkhriatt7gbrb1a19n16k22k8qi7bq9.apps.googleusercontent.com',
+    iosBundleId: 'com.taquerialety.app',
   );
-
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyDDokk4JalktXtD76icFXy8lUOJGB9UoFE',
     appId: '1:542906319053:ios:796bd9068a11071e442984',

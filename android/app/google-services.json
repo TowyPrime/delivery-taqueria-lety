@@ -20,10 +20,6 @@
             "package_name": "com.example.delivery_app",
             "certificate_hash": "a6b3b208a6ca64b64778b3512356f3032e06f905"
           }
-        },
-        {
-          "client_id": "542906319053-rd33f7iucvo52abdicobjh7tlkps5t24.apps.googleusercontent.com",
-          "client_type": 3
         }
       ],
       "api_key": [
@@ -35,14 +31,54 @@
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "542906319053-rd33f7iucvo52abdicobjh7tlkps5t24.apps.googleusercontent.com",
+              "client_id": "542906319053-q94l0ndtjojn0rh9dahu1db5tp5emkri.apps.googleusercontent.com",
               "client_type": 3
             },
             {
-              "client_id": "542906319053-puhh95skct4ndmgmuheiqpog0btecoju.apps.googleusercontent.com",
+              "client_id": "542906319053-0pkhriatt7gbrb1a19n16k22k8qi7bq9.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.example.deliveryApp"
+                "bundle_id": "com.taquerialety.app"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:542906319053:android:f2c94781f74c0eeb442984",
+        "android_client_info": {
+          "package_name": "com.taquerialety.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "542906319053-i8hnfqsu4mqq915cmscp9u8gf93ljmmf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.taquerialety.app",
+            "certificate_hash": "883b7412fab456fd8bbebad4c49361873b564be6"
+          }
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAc-wr1uucUQZQr32KYgxonqihs-8-qGgI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "542906319053-q94l0ndtjojn0rh9dahu1db5tp5emkri.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "542906319053-0pkhriatt7gbrb1a19n16k22k8qi7bq9.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.taquerialety.app"
               }
             }
           ]

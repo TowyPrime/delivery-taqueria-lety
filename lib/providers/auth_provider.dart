@@ -39,21 +39,17 @@ class AppAuthProvider with ChangeNotifier {
   Future<void> signInWithGoogle() async {
     final GoogleSignInAccount? googleUser = await GoogleAuthService.signIn();
 
-    final GoogleSignInClientAuthorization? authorization = await googleUser
-        ?.authorizationClient
-        .authorizationForScopes(['email']);
-
-    if (authorization != null) {
-      final credential = GoogleAuthProvider.credential(
-        accessToken: authorization.accessToken,
-      );
-
-      await _auth.signInWithCredential(credential);
-    } else {
-      throw Exception(
-        'No se pudieron recuperar las credenciales de autorización.',
-      );
+    if (googleUser == null) {
+      throw Exception("no se pudo inicir sesión con Google");
     }
+
+    final String? idToken = googleUser.authentication.idToken;
+    if (idToken == null) {
+      throw Exception("Google no devolvió el token de identidad");
+    }
+
+    final credential = GoogleAuthProvider.credential(idToken: idToken);
+    await _auth.signInWithCredential(credential);
   }
 
   //Inicio con correo y contraseña

@@ -52,6 +52,8 @@ dependencies:
   permission_handler: ^13.0.1
   flutter_local_notifications: ^18.0.1
   url_launcher: ^6.3.2
+  geolocator: ^14.0.2
+  geocoding: ^4.0.0
 
 dev_dependencies:
   flutter_test:
@@ -81,6 +83,7 @@ flutter:
   - .env
   - assets/ic_logo.jpg
   - assets/ic_google.png
+  - assets/data/codigos_postales.json
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see
