@@ -127,8 +127,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final int fileSizeInBytes = await file.length();
       if (fileSizeInBytes > 2 * 1024 * 1024) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('La imagen supera el límite de 2 MB')),
+          showAppSnackBar(
+            context,
+            'La imagen supera el límite de 2 MB',
+            kind: SnackKind.error,
           );
         }
         return;
@@ -157,15 +159,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Foto de perfil actualizada con éxito')),
+        showAppSnackBar(
+          context,
+          'Foto de perfil actualizada con éxito',
+          kind: SnackKind.success,
         );
       }
     } catch (e) {
       setState(() => _isUploadingImage = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al procesar la imagen: $e')),
+        showAppSnackBar(
+          context,
+          'Error al procesar la imagen: $e',
+          kind: SnackKind.error,
         );
       }
     }
@@ -318,25 +324,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                             if (context.mounted) {
                               Navigator.pop(dialogContext);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Contraseña actualizada con éxito',
-                                  ),
-                                  backgroundColor: AppColors.success,
-                                ),
+                              showAppSnackBar(
+                                context,
+                                'Contraseña actualizada con éxito',
+                                kind: SnackKind.success,
                               );
                             }
                           } catch (e) {
                             setDialogState(() => isProcessing = false);
                             if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    e.toString().replaceAll('Exception: ', ''),
-                                  ),
-                                  backgroundColor: AppColors.danger,
-                                ),
+                              showAppSnackBar(
+                                context,
+                                e.toString().replaceAll('Exception: ', ''),
+                                kind: SnackKind.error,
                               );
                             }
                           }

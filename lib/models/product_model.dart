@@ -5,27 +5,29 @@ class ProductModel {
   final String category;
   final String description;
   final String photoUrl;
-   bool isPackage;
+  final List<String> contents;
+  bool isPackage;
 
   ProductModel({
-      required this.id,
-      required this.name,
-      required this.price,
-      required this.category,
-      required this.description,
-      this.photoUrl = "",
-      this.isPackage = false
+    required this.id,
+    required this.name,
+    required this.price,
+    required this.category,
+    required this.description,
+    this.contents = const [],
+    this.photoUrl = "",
+    this.isPackage = false,
   });
 
-  factory ProductModel.fromFirestore(Map<String, dynamic> json, String docId){
+  factory ProductModel.fromFirestore(Map<String, dynamic> json, String docId) {
     return ProductModel(
       id: docId,
-       name: json['name'] ?? '',
-     price: (json['price'] ?? 0.0).toDouble(),
-     category: json['category'] ?? 'todos',
-     description: json['description'] ?? '',
-     photoUrl: json['photoUrl'] ?? '',
-     isPackage: json['isPackage'] ?? false
+      name: json['name'] ?? '',
+      price: (json['price'] ?? 0.0).toDouble(),
+      category: json['category'] ?? 'todos',
+      description: json['description'] ?? '',
+      photoUrl: json['photoUrl'] ?? '',
+      isPackage: json['isPackage'] ?? false,
     );
   }
 }

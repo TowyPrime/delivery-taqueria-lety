@@ -8,7 +8,9 @@ import 'package:delivery_app/services/claim_service.dart';
 import 'package:delivery_app/services/google_auth_service.dart';
 import 'package:delivery_app/services/notification_service.dart';
 import 'package:delivery_app/theme/app_theme.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -19,11 +21,26 @@ void main() async {
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
+  // App Check: en release usa Play Integrity / App Attest; en depuración, el
+  // proveedor de depuración (su token se registra en la consola de Firebase).
+  try {
+    await FirebaseAppCheck.instance.activate(
+      providerAndroid: kReleaseMode
+          ? const AndroidPlayIntegrityProvider()
+          : const AndroidDebugProvider(),
+      providerApple: kReleaseMode
+          ? const AppleAppAttestWithDeviceCheckFallbackProvider()
+          : const AppleDebugProvider(),
+    );
+  } catch (e) {
+    debugPrint('No se pudo activar App Check: $e');
+  }
+
   await dotenv.load(fileName: ".env");
 
   await GoogleAuthService.initialize();
 
-  NotificationService.initialize();
+  await NotificationService.initialize();
 
   Stripe.publishableKey = dotenv.env['STRIPE_PUBLISHABLE_KEY'] ?? '';
 

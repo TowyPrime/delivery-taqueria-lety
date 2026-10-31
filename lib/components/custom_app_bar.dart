@@ -49,7 +49,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
             )
           : const Padding(
               padding: EdgeInsets.only(left: 16, top: 8, bottom: 8),
-              child: BrandLogo(size: 40),
+              child: BrandLogo(size: 20),
             ),
       title: Text(title.isEmpty ? 'Taquería Lety' : title),
       actions: [

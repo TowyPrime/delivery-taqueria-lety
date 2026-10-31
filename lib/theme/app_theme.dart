@@ -5,11 +5,11 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
-  static const primary = Color(0xFFC8391A);
-  static const primaryDark = Color(0xFF8C2410);
-  static const primarySoft = Color(0xFFFBE7DF);
+  static const primary = Color(0xFF4E1F16);
+  static const primaryDark = Color(0xFF2E100B);
+  static const primarySoft = Color(0xFFF3E6DE);
 
-  static const accent = Color(0xFFF2A33A);
+  static const accent = Color(0xFFE8A33D);
   static const accentSoft = Color(0xFFFFF0D6);
   static const warning = Color(0xFF9A5B00);
 
@@ -25,7 +25,7 @@ class AppColors {
   static const background = Color(0xFFFBF5EA);
   static const surface = Colors.white;
 
-  static const ink = Color(0xFF3A2018);
+  static const ink = Color(0xFF2B1B16);
   static const inkSoft = Color(0xFF7A6259);
 
   static const border = Color(0xFFEADFCB);
@@ -296,6 +296,8 @@ void showAppSnackBar(
       SnackBar(
         backgroundColor: color,
         duration: duration,
+        // Con acción, Flutter lo deja fijo por accesibilidad: forzamos el cierre
+        persist: false,
         action: actionLabel == null
             ? null
             : SnackBarAction(

@@ -54,6 +54,9 @@ dependencies:
   url_launcher: ^6.3.2
   geolocator: ^14.0.2
   geocoding: ^4.0.0
+  cloud_functions: ^6.5.1
+  firebase_messaging: ^16.7.1
+  firebase_app_check: ^0.4.9
 
 dev_dependencies:
   flutter_test:
@@ -83,6 +86,7 @@ flutter:
   - .env
   - assets/ic_logo.jpg
   - assets/ic_google.png
+  - assets/ic_logo_round.png
   - assets/data/codigos_postales.json
   #   - images/a_dot_ham.jpeg
 

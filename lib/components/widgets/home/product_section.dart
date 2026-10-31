@@ -15,6 +15,9 @@ class ProductSection extends StatelessWidget {
   final VoidCallback? onSeeAll;
   final bool showImage;
   final bool isFeatured;
+  final double cardWith;
+  final double carouseHeight;
+  final double imageHeight;
 
   const ProductSection({
     super.key,
@@ -24,10 +27,10 @@ class ProductSection extends StatelessWidget {
     this.onSeeAll,
     this.showImage = true,
     this.isFeatured = false,
+    required this.cardWith,
+    required this.carouseHeight,
+    required this.imageHeight,
   });
-
-  static const double _cardWidth = 186;
-  static const double _carouselHeight = 268;
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +46,7 @@ class ProductSection extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         SizedBox(
-          height: _carouselHeight,
+          height: carouseHeight,
           child: StreamBuilder<QuerySnapshot>(
             stream: query.snapshots(),
             builder: (context, snapshot) {
@@ -80,11 +83,12 @@ class ProductSection extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final product = products[index];
                   return SizedBox(
-                    width: _cardWidth,
+                    width: cardWith,
                     child: _ProductCard(
                       product: product,
                       isPromo: !isFeatured,
                       showImage: showImage,
+                      imageHeight: imageHeight,
                       onAdd: () => handleProductSelection(
                         context: context,
                         product: product,
@@ -107,11 +111,13 @@ class _ProductCard extends StatelessWidget {
   final ProductModel product;
   final bool isPromo;
   final bool showImage;
+  final double imageHeight;
   final VoidCallback onAdd;
 
   const _ProductCard({
     required this.product,
     required this.isPromo,
+    required this.imageHeight,
     required this.showImage,
     required this.onAdd,
   });
@@ -129,7 +135,7 @@ class _ProductCard extends StatelessWidget {
                 ProductThumb(
                   url: showImage ? product.photoUrl : '',
                   width: double.infinity,
-                  height: 118,
+                  height: imageHeight,
                   radius: 0,
                   fallbackIcon: isPromo
                       ? Icons.local_offer_rounded
@@ -238,10 +244,7 @@ class _SectionMessage extends StatelessWidget {
           Icon(icon, color: AppColors.inkSoft),
           const SizedBox(width: 10),
           Flexible(
-            child: Text(
-              text,
-              style: const TextStyle(color: AppColors.inkSoft),
-            ),
+            child: Text(text, style: const TextStyle(color: AppColors.inkSoft)),
           ),
         ],
       ),

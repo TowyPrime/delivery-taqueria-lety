@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Evita que la reducción de recursos de la versión release borre el icono de
+     notificación, que solo se usa por nombre ('ic_notification') desde Dart. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_notification" />

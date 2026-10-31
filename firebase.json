@@ -1,1 +1,42 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"deliveryapp-42127","appId":"1:542906319053:android:f2c94781f74c0eeb442984","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"deliveryapp-42127","configurations":{"android":"1:542906319053:android:f2c94781f74c0eeb442984","ios":"1:542906319053:ios:715f6ba6449b68d8442984"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "deliveryapp-42127",
+          "appId": "1:542906319053:android:f2c94781f74c0eeb442984",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "deliveryapp-42127",
+          "configurations": {
+            "android": "1:542906319053:android:f2c94781f74c0eeb442984",
+            "ios": "1:542906319053:ios:715f6ba6449b68d8442984"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run build"
+      ]
+    }
+  ],
+  "firestore": {
+    "rules": "firestore.rules"
+  }
+}

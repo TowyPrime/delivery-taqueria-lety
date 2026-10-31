@@ -1,5 +1,4 @@
 import 'package:delivery_app/components/widgets/app_widgets.dart';
-import 'package:delivery_app/services/order_service.dart';
 import 'package:delivery_app/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -8,203 +7,45 @@ import 'package:delivery_app/components/item_cart.dart';
 import '../providers/cart_provider.dart';
 import '../providers/auth_provider.dart';
 import 'login_screen.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:delivery_app/services/delivery_zone_service.dart';
 
 class CartScreen extends StatelessWidget {
   final VoidCallback? onGoToMenu;
 
   const CartScreen({super.key, this.onGoToMenu});
 
-  //Verificar si el usuario tiene una dirección dentro de la zona de reparto
-  Future<bool> _checkDeliveryZone(BuildContext context) async {
-    final uid = Provider.of<AppAuthProvider>(context, listen: false).user?.uid;
-    if (uid == null) return false;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-
-    String? problema;
-    try {
-      final snap = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .get();
-      final dir = snap.data()?['direccion'] as Map<String, dynamic>?;
-      final lat = (dir?['lat'] as num).toDouble();
-      final lng = (dir?['lng'] as num).toDouble();
-
-      if (dir == null || (dir['calle'] ?? '').toString().trim().isEmpty) {
-        problema =
-            'Aún no tienes una dirección de envío. Agrégala en "Mis datos" para poder pedir.';
-      } else if (lat == null || lng == null) {
-        problema =
-            'No pudimos ubicar tu dirección. Revísala en "Mis datos" (calle, colonia y C.P.) y guárdala de nuevo.';
-      } else {
-        final zona = await DeliveryZoneService().checkCoordinates(lat, lng);
-        if (!zona.inside) {
-          problema =
-              'Tu dirección queda a ${zona.distanceKm.toStringAsFixed(1)} km de la taquería, fuera de nuestra zona de reparto.';
-        }
-      }
-    } catch (_) {
-      problema =
-          'No pudimos verificar tu zona de reparto. Revisa tu conexión e intenta de nuevo.';
-    }
-
-    if (context.mounted) Navigator.pop(context);
-    if (problema == null) return true;
-
-    if (context.mounted) {
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('No podemos hacer el envío'),
-          content: Text(problema!),
-          actions: [
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Entendido'),
-            ),
-          ],
-        ),
-      );
-    }
-    return false;
-  }
-
-  Future<void> _processStripePayment(
+  Future<void> _checkout(
     BuildContext context,
     CartProvider cartProvider,
   ) async {
-    final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
-    //Mostrar indicador de carga en lo que se conecta al servidor
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => const Center(child: CircularProgressIndicator()),
     );
 
-    //Llamar al servicio de cobro
-    final PaymentResult payment = await PaymentService.makePayment(
-      context: context,
-      totalAmount: cartProvider.total,
-    );
+    final result = await PaymentService.checkout(cartProvider);
 
-    //Quitar el indicador de carga
-    if (context.mounted) Navigator.pop(context);
+    if (!context.mounted) return;
+    Navigator.pop(context); // quita el indicador de carga
 
-    if (payment.success) {
-      if (!context.mounted) return;
-
-      // El cobro ya se hizo: no vaciamos el carrito hasta tener el pedido
-      // guardado, y si falla dejamos reintentar sin volver a cobrar.
-      final bool orderSaved = await _saveOrderWithRetry(
-        context,
-        authProvider,
-        cartProvider,
-        payment.paymentIntentId,
-      );
-
-      if (orderSaved) {
-        if (context.mounted) {
-          showAppSnackBar(
-            context,
-            '¡Pedido confirmado! Tu pedido está siendo procesado',
-            kind: SnackKind.success,
-          );
-        }
-        //limpiar carrito
-        cartProvider.clearCart();
-        //resetear cuenta de platos
-        cartProvider.clearListPlates();
-      }
-    } else {
-      // Si falla o se cancela
-      if (context.mounted) {
+    switch (result.status) {
+      case CheckoutStatus.paid:
         showAppSnackBar(
           context,
-          'No pudo realizarse el cobro, intenta de nuevo...',
-          kind: SnackKind.error,
+          '¡Pedido confirmado! Tu pedido está siendo procesado',
+          kind: SnackKind.success,
         );
-      }
-    }
-  }
-
-  /// Guarda el pedido en Firestore. Si falla, avisa y permite reintentar
-  /// (el carrito se conserva). Devuelve true solo si el pedido quedó guardado.
-  Future<bool> _saveOrderWithRetry(
-    BuildContext context,
-    AppAuthProvider authProvider,
-    CartProvider cartProvider,
-    String? paymentIntentId,
-  ) async {
-    while (true) {
-      if (!context.mounted) return false;
-
-      //Mostrar la carga mientras se guarda en base de datos la orden
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const Center(child: CircularProgressIndicator()),
-      );
-
-      //Intentar guardar pedido en base de datos
-      final bool saved = await OrderService.createOrder(
-        context: context,
-        userId: authProvider.user?.uid ?? 'anon_uid',
-        userName:
-            authProvider.user?.displayName ??
-            authProvider.user?.email ??
-            'cliente',
-        cart: cartProvider,
-        paymentIntentId: paymentIntentId,
-      );
-
-      //Quitar indicador de carga
-      if (context.mounted) Navigator.pop(context);
-      if (saved) return true;
-      if (!context.mounted) return false;
-
-      final bool? retry = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('No pudimos registrar tu pedido'),
-          content: const Text(
-            'Tu pago se realizó correctamente, pero hubo un problema al '
-            'guardar el pedido. Tu carrito sigue intacto: reintenta para no '
-            'perder tu compra.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              style: TextButton.styleFrom(foregroundColor: AppColors.inkSoft),
-              child: const Text('Ahora no'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
-              child: const Text('Reintentar'),
-            ),
-          ],
-        ),
-      );
-
-      if (retry != true) {
-        if (context.mounted) {
-          showAppSnackBar(
-            context,
-            'Tu pedido no quedó registrado. Conserva tu comprobante de pago y contacta a la taquería.',
-            kind: SnackKind.error,
-            duration: const Duration(seconds: 8),
-          );
-        }
-        return false;
-      }
+        cartProvider.clearCart();
+        cartProvider.clearListPlates();
+      case CheckoutStatus.cancelled:
+        showAppSnackBar(context, 'Pago cancelado', kind: SnackKind.info);
+      case CheckoutStatus.failed:
+        showAppSnackBar(
+          context,
+          result.message ?? 'No pudo realizarse el cobro',
+          kind: SnackKind.error,
+          duration: const Duration(seconds: 6),
+        );
     }
   }
 
@@ -280,21 +121,13 @@ class CartScreen extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               AmountRow(
-                label: 'Subtotal',
-                value: '${formatMoney(cartProvider.subtotal)} MXN',
-              ),
-              AmountRow(
-                label: 'Costo de envío',
-                value: '${formatMoney(cartProvider.envio)} MXN',
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: Divider(),
-              ),
-              AmountRow(
                 label: 'Total',
-                value: '${formatMoney(cartProvider.total)} MXN',
+                value: '${formatMoney(cartProvider.subtotal)} MXN',
                 isTotal: true,
+              ),
+              Text(
+                "El costo de envío se agregará al pagar",
+                style: TextStyle(color: const Color(0xFF57534E), fontSize: 12),
               ),
               const SizedBox(height: 14),
               FilledButton.icon(
@@ -302,8 +135,7 @@ class CartScreen extends StatelessWidget {
                   if (authProvider.isGuest) {
                     _showAuthRequiredDialog(context);
                   } else {
-                    // Flujo de cobro
-                    _processStripePayment(context, cartProvider);
+                    _checkout(context, cartProvider);
                   }
                 },
                 icon: const Icon(Icons.lock_outline_rounded, size: 20),

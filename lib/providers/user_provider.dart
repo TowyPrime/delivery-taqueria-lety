@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:delivery_app/services/push_service.dart';
 
 class UserProvider extends ChangeNotifier {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -130,6 +131,9 @@ class UserProvider extends ChangeNotifier {
     final String uid = user.uid;
 
     try{
+          //Dejar de recibir avisos y borrar el token de este teléfono
+          await PushService.removeToken();
+
           //Borrar datos de usuario
           await _db.collection('users').doc(uid).delete();
 

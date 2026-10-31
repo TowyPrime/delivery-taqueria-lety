@@ -8,16 +8,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:delivery_app/components/widgets/menu/list_view_menu.dart';
 
 class MenuScreen extends StatefulWidget {
-  final String? orderIdToModify;
-  final Map<String, dynamic>? currentOrderData;
   final VoidCallback? onGoToCart;
 
-  const MenuScreen({
-    super.key,
-    this.orderIdToModify,
-    this.currentOrderData,
-    this.onGoToCart,
-  });
+  const MenuScreen({super.key, this.onGoToCart});
 
   @override
   State<MenuScreen> createState() => _MenuScreenState();
@@ -38,21 +31,11 @@ class _MenuScreenState extends State<MenuScreen> {
     'Orden': Icons.dinner_dining_rounded,
     'Bebida': Icons.local_drink_rounded,
     'Postre': Icons.icecream_rounded,
-    'Paquetes': Icons.local_offer_rounded,
   };
 
   final _searchController = TextEditingController();
   String _selectedCategory = 'Todos';
   String _searchQuery = '';
-
-  @override
-  void initState() {
-    super.initState();
-    // Añadimos la categoría visual de Paquetes solo si estamos editando una orden
-    if (widget.orderIdToModify != null && !_categories.contains('Paquetes')) {
-      _categories.add('Paquetes');
-    }
-  }
 
   @override
   void dispose() {
@@ -65,12 +48,9 @@ class _MenuScreenState extends State<MenuScreen> {
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
 
     // Configuración dinámica de la Query
-    Query query = FirebaseFirestore.instance.collection('products');
-
-    // Reasignar la Query para que aplique el filtro en Firestore
-    if (widget.orderIdToModify == null) {
-      query = query.where('isPackage', isEqualTo: false);
-    }
+    final Query query = FirebaseFirestore.instance
+        .collection('products')
+        .where('isPackage', isEqualTo: false);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
@@ -156,16 +136,10 @@ class _MenuScreenState extends State<MenuScreen> {
 
                 // Aplicar filtros locales (Categorías y Búsqueda)
                 final filteredProducts = allProducts.where((product) {
-                  bool matchesCategory = false;
-
-                  if (_selectedCategory == 'Paquetes') {
-                    matchesCategory = product.isPackage == true;
-                  } else {
-                    matchesCategory =
-                        _selectedCategory == 'Todos' ||
-                        product.category.toLowerCase() ==
-                            _selectedCategory.toLowerCase();
-                  }
+                  final matchesCategory =
+                      _selectedCategory == 'Todos' ||
+                      product.category.toLowerCase() ==
+                          _selectedCategory.toLowerCase();
 
                   final matchesSearch =
                       product.name.toLowerCase().contains(_searchQuery) ||
@@ -182,13 +156,10 @@ class _MenuScreenState extends State<MenuScreen> {
                   );
                 }
 
-                //  Se pasan los datos de la orden activa hacia ListViewMenu
                 return ListViewMenu(
                   filteredProducts: filteredProducts,
                   cartProvider: cartProvider,
                   allProducts: allProducts,
-                  orderIdToModify: widget.orderIdToModify,
-                  currentOrderData: widget.currentOrderData,
                   onGoToCart: widget.onGoToCart,
                 );
               },

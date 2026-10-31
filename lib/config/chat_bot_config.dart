@@ -12,8 +12,8 @@ class ChatBotConfig {
 
   /// Número de WhatsApp del negocio con lada de país, sin "+" ni espacios.
   /// Ejemplo México: 52 + 10 dígitos → '525512345678'.
-  /// TODO: reemplazar por el número real del negocio.
-  static const String whatsappNumber = '520000000000';
+
+  static const String whatsappNumber = '523313982071';
 
   /// Mensaje que aparece escrito de antemano al abrir WhatsApp.
   static const String whatsappPrefilledText =
@@ -59,7 +59,8 @@ class ChatBotConfig {
   static const String loginRequired =
       'Para consultar tus pedidos necesitas iniciar sesión.';
 
-  static const String claimsIntro = 'Estas son tus reclamaciones más recientes:';
+  static const String claimsIntro =
+      'Estas son tus reclamaciones más recientes:';
 
   static const String claimsEmpty =
       'No tienes reclamaciones registradas. Si tuviste un problema con un '

@@ -1,4 +1,5 @@
 import 'package:delivery_app/services/google_auth_service.dart';
+import 'package:delivery_app/services/push_service.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -76,6 +77,10 @@ class AppAuthProvider with ChangeNotifier {
   //Cerrar sesión
   Future<void> signOut() async {
     try {
+      // Antes de cerrar sesión, para que este teléfono deje de recibir
+      // los avisos de este usuario
+      await PushService.removeToken();
+
       await _auth.signOut();
 
       GoogleAuthService.signOut();

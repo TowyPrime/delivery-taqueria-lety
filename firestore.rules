@@ -1,0 +1,208 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// products/{productId}      -> solo lectura desde la app (se administra en consola)
+// config/delivery           -> lat, lng, radius_km (solo lectura desde la app)
+// announcements/{id}        -> anuncio del banner (solo admin escribe)
+//
+// users/{uid}
+//   uid: string, nombre: string, apellido: string, telefono: string,
+//   direccion: map { calle, numero_exterior, numero_interior, codigo_postal,
+//                    colonia, ciudad: string; lat, lng: number|null },
+//   updated_at: timestamp, role: string (SOLO se asigna desde la consola)
+//
+// orders/{orderId}
+//   Los crea SOLO la Cloud Function createCheckout y el webhook de Stripe
+//   (Admin SDK, que ignora estas reglas). La app solo puede:
+//     - cancelar su pedido (status -> 'cancelado') si está pendiente
+//     - marcar su reclamación (hasClaim, claimId, updatedAt)
+//   El admin puede cambiar status / updatedAt.
+//
+// claims/{claimId}
+//   orderId, userId, userName, type, reason, status ('abierta' al crear),
+//   evidenceUrls: list, orderTotal: number, orderStatusAtRequest, contactPhone,
+//   createdAt, updatedAt: timestamp. Solo el admin las actualiza.
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // El rol vive en users/{uid}.role y solo se puede asignar desde la
+    // consola de Firebase (las reglas de users impiden que el usuario lo toque).
+    function isAdmin() {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'admin';
+    }
+
+    function isShortString(v, maxLen) {
+      return v is string && v.size() <= maxLen;
+    }
+
+    function isCoord(v, limit) {
+      return v == null || (v is number && v >= -limit && v <= limit);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function userEditableFields() {
+      return ['uid', 'nombre', 'apellido', 'telefono', 'direccion', 'updated_at'];
+    }
+
+    function isValidAddress(a) {
+      return a is map &&
+        a.keys().hasOnly(['calle', 'numero_exterior', 'numero_interior',
+                          'codigo_postal', 'colonia', 'ciudad', 'lat', 'lng']) &&
+        isShortString(a.get('calle', ''), 120) &&
+        isShortString(a.get('numero_exterior', ''), 30) &&
+        isShortString(a.get('numero_interior', ''), 30) &&
+        isShortString(a.get('codigo_postal', ''), 10) &&
+        isShortString(a.get('colonia', ''), 120) &&
+        isShortString(a.get('ciudad', ''), 120) &&
+        isCoord(a.get('lat', null), 90) &&
+        isCoord(a.get('lng', null), 180);
+    }
+
+    function isValidUserData(d) {
+      return (!('uid' in d) || d.uid == request.auth.uid) &&
+        (!('nombre' in d) || isShortString(d.nombre, 60)) &&
+        (!('apellido' in d) || isShortString(d.apellido, 60)) &&
+        (!('telefono' in d) || isShortString(d.telefono, 20)) &&
+        (!('direccion' in d) || isValidAddress(d.direccion)) &&
+        (!('updated_at' in d) || d.updated_at is timestamp);
+    }
+
+    function isValidNewClaim(d) {
+      return d.keys().hasOnly(['orderId', 'userId', 'userName', 'type', 'reason',
+                               'status', 'evidenceUrls', 'orderTotal',
+                               'orderStatusAtRequest', 'contactPhone',
+                               'createdAt', 'updatedAt']) &&
+        d.keys().hasAll(['orderId', 'userId', 'type', 'reason', 'status',
+                         'evidenceUrls', 'createdAt']) &&
+        d.userId == request.auth.uid &&
+        d.status == 'abierta' &&
+        isShortString(d.orderId, 64) &&
+        isShortString(d.userName, 100) &&
+        isShortString(d.type, 40) &&
+        isShortString(d.reason, 2000) &&
+        d.evidenceUrls is list && d.evidenceUrls.size() <= 10 &&
+        (!('orderTotal' in d) || d.orderTotal is number) &&
+        (!('orderStatusAtRequest' in d) || isShortString(d.orderStatusAtRequest, 40)) &&
+        (!('contactPhone' in d) || isShortString(d.contactPhone, 30)) &&
+        d.createdAt == request.time &&
+        // La reclamación debe ser de un pedido del propio usuario
+        get(/databases/$(database)/documents/orders/$(d.orderId)).data.userId == request.auth.uid;
+    }
+
+    // ===============================================================
+    // Collections
+    // ===============================================================
+
+    match /products/{productId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    match /config/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+
+      // Sin 'role': nadie puede darse a sí mismo un rol al crear su perfil
+      allow create: if isOwner(userId) &&
+        request.resource.data.keys().hasOnly(userEditableFields()) &&
+        isValidUserData(request.resource.data);
+
+      // Solo se pueden tocar los campos editables; 'role' queda protegido
+      allow update: if isOwner(userId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(userEditableFields()) &&
+        isValidUserData(request.resource.data);
+
+      allow delete: if isOwner(userId);
+
+      // Tokens de push de cada teléfono del usuario (los lee la Cloud Function)
+      match /fcmTokens/{token} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) &&
+          request.resource.data.keys().hasOnly(['platform', 'updatedAt']) &&
+          request.resource.data.platform in ['android', 'ios'] &&
+          request.resource.data.updatedAt is timestamp;
+      }
+    }
+
+    match /orders/{orderId} {
+
+      function changedKeys() {
+        return request.resource.data.diff(resource.data).affectedKeys();
+      }
+
+      function isOrderOwner() {
+        return resource.data.userId == request.auth.uid;
+      }
+
+
+      // Marcar el pedido como reclamado (una sola vez)
+      function isOwnerClaim() {
+        return isOrderOwner() &&
+          changedKeys().hasOnly(['hasClaim', 'claimId', 'updatedAt']) &&
+          resource.data.get('hasClaim', false) == false &&
+          request.resource.data.hasClaim == true &&
+          request.resource.data.claimId is string;
+      }
+
+      function isAdminStatusUpdate() {
+        return isAdmin() &&
+          changedKeys().hasOnly(['status', 'updatedAt']) &&
+          request.resource.data.status is string;
+      }
+
+      allow read: if isAuthenticated() && (isOrderOwner() || isAdmin());
+
+      // Los pedidos los crea SOLO la Cloud Function (Admin SDK)
+      allow create: if false;
+
+      allow update: if isAuthenticated() &&
+        (isOwnerClaim() || isAdminStatusUpdate());
+
+      allow delete: if false;
+    }
+
+    match /claims/{claimId} {
+      allow read: if isAuthenticated() &&
+        (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isAuthenticated() && isValidNewClaim(request.resource.data);
+
+      // Solo el admin resuelve reclamaciones (status, resolution, refundAmount)
+      allow update: if isAdmin();
+
+      allow delete: if false;
+    }
+  }
+}

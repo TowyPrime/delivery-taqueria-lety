@@ -12,13 +12,11 @@ import 'package:delivery_app/providers/order_provider.dart';
 class OrderDetailWidget extends StatelessWidget {
   final String orderId;
   final Map<String, dynamic> orderData;
-  final bool isEditable;
 
   const OrderDetailWidget({
     super.key,
     required this.orderId,
     required this.orderData,
-    required this.isEditable,
   });
 
   @override
@@ -174,7 +172,7 @@ class OrderDetailWidget extends StatelessWidget {
                     label: const Text('Solicitar devolución'),
                     onPressed: () => _openClaimForm(context, total, status),
                   )
-                else
+                else if (status == 'pendiente')
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.danger,
@@ -188,17 +186,49 @@ class OrderDetailWidget extends StatelessWidget {
                       bool confirm = await _showConfirmDialog(context);
                       if (!confirm || !context.mounted) return;
 
-                      Navigator.pop(context); // Cierra el modal de detalle
-                      await orderProvider.cancelOrder(orderId);
+                      // Capturar el rootContext antes de realizar operaciones asíncronas
+                      final rootContext = Navigator.of(
+                        context,
+                        rootNavigator: true,
+                      ).context;
 
-                      if (context.mounted) {
+                      try {
+                        // Cancelar primero (antes de cerrar el modal)
+                        await orderProvider.cancelOrder(orderId);
+
+                        // Si sale bien, cerramos el modal de detalle
+                        if (!context.mounted) return;
+                        Navigator.pop(context);
+
+                        // Mostrar el mensaje de éxito
                         showAppSnackBar(
-                          context,
-                          'Solicitud procesada. Si el método de pago fue por tarjeta, la devolución del dinero se hará en un periodo aproximado de 24 hrs.',
+                          rootContext,
+                          'Pedido cancelado. Tu reembolso llegará en 5 a 10 días hábiles.',
                           duration: const Duration(seconds: 5),
                         );
+                      } catch (e) {
+                        // Si falla, el modal NO se cierra y mostramos el error
+                        if (rootContext.mounted) {
+                          showAppSnackBar(
+                            rootContext,
+                            e.toString().replaceFirst('Exception: ', ''),
+                            kind: SnackKind.error,
+                            duration: const Duration(seconds: 5),
+                          );
+                        }
                       }
                     },
+                  )
+                else if ([
+                  'preparando',
+                  'en preparación',
+                  'en camino',
+                ].contains(status))
+                  const _InfoBox(
+                    text:
+                        'Tu pedido ya está en preparación y no puede cancelarse',
+                    color: AppColors.warning,
+                    background: AppColors.dangerSoft,
                   ),
               ],
             ),
@@ -222,8 +252,7 @@ class OrderDetailWidget extends StatelessWidget {
           orderTotal: total,
           orderStatus: status,
           userId: auth.user?.uid ?? '',
-          userName:
-              auth.user?.displayName ?? auth.user?.email ?? 'cliente',
+          userName: auth.user?.displayName ?? auth.user?.email ?? 'cliente',
           contactPhone: phone,
         ),
       ),
@@ -314,7 +343,10 @@ class _ItemCard extends StatelessWidget {
     final int quantity = (item['quantity'] as num? ?? 1).toInt();
     // Los platos guardan sus ingredientes como "products" (carrito) o
     // "details" (pedido modificado).
-    final List parts = List.from(item['products'] ?? item['details'] ?? const []);
+    final List parts = List.from(
+      item['products'] ?? item['details'] ?? const [],
+    );
+    final List contents = List.from(item['contents'] ?? const []);
 
     return Card(
       child: Padding(
@@ -348,6 +380,17 @@ class _ItemCard extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
+                  for (final c in contents)
+                    (Padding(
+                      padding: EdgeInsets.only(top: 2),
+                      child: Text(
+                        '• $c',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.inkSoft,
+                        ),
+                      ),
+                    )),
                   for (final part in parts)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),

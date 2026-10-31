@@ -6,20 +6,23 @@ import 'package:delivery_app/theme/app_theme.dart';
 import 'package:delivery_app/services/delivery_zone_service.dart';
 import 'package:delivery_app/services/postal_code_service.dart';
 
-class AdminScreen extends StatefulWidget {
-  const AdminScreen({super.key});
+class MisDatosScreen extends StatefulWidget {
+  const MisDatosScreen({super.key});
 
   @override
-  State<AdminScreen> createState() => _AdminScreenState();
+  State<MisDatosScreen> createState() => _MisDatosScreenState();
 }
 
-class _AdminScreenState extends State<AdminScreen> {
+class _MisDatosScreenState extends State<MisDatosScreen> {
   final _formKey = GlobalKey<FormState>();
   final _zoneService = DeliveryZoneService();
   final _cpService = PostalCodeService();
   List<String> _colonias = [];
   bool _cpNoEncontrado = false;
   bool _cpInicializado = false;
+  bool _controladoresLlenados = false;
+  bool _buscandoUbicacion = false;
+  ({double lat, double lng})? _gpsCoords;
 
   // Controladores para el formulario
   final TextEditingController nombreController = TextEditingController();
@@ -58,38 +61,21 @@ class _AdminScreenState extends State<AdminScreen> {
 
   // Sincroniza el texto actual del Provider con los controladores del formulario
   void _rellenarControladores(Map<String, dynamic>? datos) {
-    if (datos == null) return;
+    if (datos == null || _controladoresLlenados) return;
+    _controladoresLlenados = true;
 
     Map<String, dynamic> direccion = datos['direccion'] ?? {};
 
-    // Solo asignamos si el usuario no ha escrito nada aún (evita sobrescribir mientras escribe)
-    if (nombreController.text.isEmpty) {
-      nombreController.text = datos['nombre'] ?? '';
-    }
-    if (apellidoController.text.isEmpty) {
-      apellidoController.text = datos['apellido'] ?? '';
-    }
-    if (telefonoController.text.isEmpty) {
-      telefonoController.text = datos['telefono'] ?? '';
-    }
-    if (calleController.text.isEmpty) {
-      calleController.text = direccion['calle'] ?? '';
-    }
-    if (numExtController.text.isEmpty) {
-      numExtController.text = direccion['numero_exterior'] ?? '';
-    }
-    if (numIntController.text.isEmpty) {
-      numIntController.text = direccion['numero_interior'] ?? '';
-    }
-    if (cpController.text.isEmpty) {
-      cpController.text = direccion['codigo_postal'] ?? '';
-    }
-    if (coloniaController.text.isEmpty) {
-      coloniaController.text = direccion['colonia'] ?? '';
-    }
-    if (ciudadController.text.isEmpty) {
-      ciudadController.text = direccion['ciudad'] ?? '';
-    }
+    // Se llena una sola vez: si no, al borrar un campo se restauraría solo
+    nombreController.text = datos['nombre'] ?? '';
+    apellidoController.text = datos['apellido'] ?? '';
+    telefonoController.text = datos['telefono'] ?? '';
+    calleController.text = direccion['calle'] ?? '';
+    numExtController.text = direccion['numero_exterior'] ?? '';
+    numIntController.text = direccion['numero_interior'] ?? '';
+    cpController.text = direccion['codigo_postal'] ?? '';
+    coloniaController.text = direccion['colonia'] ?? '';
+    ciudadController.text = direccion['ciudad'] ?? '';
   }
 
   Future<void> _onCpChanged(String value) async {
@@ -118,10 +104,59 @@ class _AdminScreenState extends State<AdminScreen> {
       _cpNoEncontrado = false;
       _colonias = info.colonias;
       ciudadController.text = info.ciudad;
-      if (!_colonias.contains(coloniaController.text)) {
+      final actual = coloniaController.text.trim().toLowerCase();
+      final match = _colonias.where((c) => c.toLowerCase() == actual);
+      if (match.isNotEmpty) {
+        coloniaController.text = match.first;
+      } else {
         coloniaController.text = _colonias.length == 1 ? _colonias.first : '';
       }
     });
+  }
+
+  Future<void> _usarMiUbicacion() async {
+    setState(() {
+      _buscandoUbicacion = true;
+    });
+
+    try {
+      final r = await _zoneService.currentLocationAddress();
+      if (!mounted) return;
+
+      calleController.text = r.direccion['calle'] ?? "";
+      numExtController.text = r.direccion['numero_exterior'] ?? "";
+      cpController.text = r.direccion['codigo_postal'] ?? "";
+      ciudadController.text = r.direccion['ciudad'] ?? "";
+
+      coloniaController.text = r.direccion['colonia'] ?? "";
+      _gpsCoords = (lat: r.lat, lng: r.lng);
+
+      await _onCpChanged(cpController.text);
+
+      if (!mounted) return;
+      showAppSnackBar(
+        context,
+        "Revisa que los datos sean correctos y después guarda",
+        kind: SnackKind.info,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      if (e is LocationException) {
+        showAppSnackBar(context, e.message, kind: SnackKind.error);
+      } else {
+        showAppSnackBar(
+          context,
+          "No se pudo obtener tu ubicación. Intenta de nuevo",
+          kind: SnackKind.error,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _buscandoUbicacion = false;
+        });
+      }
+    }
   }
 
   @override
@@ -188,11 +223,28 @@ class _AdminScreenState extends State<AdminScreen> {
             title: 'Dirección de envío',
             icon: Icons.location_on_outlined,
             children: [
+              //Botón gps
+              OutlinedButton.icon(
+                onPressed: _buscandoUbicacion ? null : _usarMiUbicacion,
+                icon: _buscandoUbicacion
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.my_location_outlined),
+                label: Text(
+                  _buscandoUbicacion ? 'Buscando…' : 'Usar mi ubicación',
+                ),
+              ),
+
+              const SizedBox(height: 8),
               // Campos de dirección desglosados
               _buildProfileField(
                 Icons.signpost_outlined,
                 'Calle',
                 calleController,
+                onChanged: (_) => setState(() => _gpsCoords = null),
               ),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -202,6 +254,7 @@ class _AdminScreenState extends State<AdminScreen> {
                       Icons.home_outlined,
                       'No. Ext',
                       numExtController,
+                      onChanged: (_) => setState(() => _gpsCoords = null),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -225,7 +278,10 @@ class _AdminScreenState extends State<AdminScreen> {
                       cpController,
                       keyboardType: TextInputType.number,
                       maxLength: 5,
-                      onChanged: _onCpChanged,
+                      onChanged: (v) {
+                        _gpsCoords = null;
+                        _onCpChanged(v);
+                      },
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -264,15 +320,25 @@ class _AdminScreenState extends State<AdminScreen> {
                 };
 
                 // Ubicamos la dirección y revisamos la zona de reparto
+                // 1) Ubicar la dirección: las coordenadas se guardan siempre
+                final coords =
+                    _gpsCoords ?? await _zoneService.geocodeAddress(direccion);
+                direccion['lat'] = coords?.lat;
+                direccion['lng'] = coords?.lng;
+
+                // 2) Revisar la zona: si falla (red, permisos) no perdemos
+                // las coordenadas, solo no podemos avisar
                 DeliveryZoneResult? zona;
-                try {
-                  zona = await _zoneService.checkAddress(direccion);
-                } catch (_) {
-                  zona =
-                      null; // sin red o sin config: guardamos sin coordenadas
+                if (coords != null) {
+                  try {
+                    zona = await _zoneService.checkCoordinates(
+                      coords.lat,
+                      coords.lng,
+                    );
+                  } catch (e) {
+                    debugPrint('No se pudo verificar la zona: $e');
+                  }
                 }
-                direccion['lat'] = zona?.lat;
-                direccion['lng'] = zona?.lng;
 
                 final datosAActualizar = {
                   'nombre': nombreController.text.trim(),
@@ -292,10 +358,16 @@ class _AdminScreenState extends State<AdminScreen> {
                       'Error al guardar los datos',
                       kind: SnackKind.error,
                     );
-                  } else if (zona == null) {
+                  } else if (coords == null) {
                     showAppSnackBar(
                       context,
                       'Datos guardados, pero no pudimos ubicar tu dirección. Revisa calle, colonia y C.P.',
+                      kind: SnackKind.info,
+                    );
+                  } else if (zona == null) {
+                    showAppSnackBar(
+                      context,
+                      'Datos guardados. No pudimos verificar tu zona de reparto por ahora.',
                       kind: SnackKind.info,
                     );
                   } else if (!zona.inside) {
@@ -403,6 +475,7 @@ class _AdminScreenState extends State<AdminScreen> {
         Icons.location_city_outlined,
         'Colonia',
         coloniaController,
+        onChanged: (_) => _gpsCoords = null,
       );
     }
 
@@ -410,7 +483,9 @@ class _AdminScreenState extends State<AdminScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: DropdownButtonFormField<String>(
-        key: ValueKey('colonia_${cpController.text}_${_colonias.length}'),
+        key: ValueKey(
+          'colonia_${cpController.text}_${_colonias.length}_$actual',
+        ),
         initialValue: _colonias.contains(actual) ? actual : null,
         isExpanded: true,
         decoration: const InputDecoration(
@@ -425,7 +500,10 @@ class _AdminScreenState extends State<AdminScreen> {
               ),
             )
             .toList(),
-        onChanged: (v) => coloniaController.text = v ?? '',
+        onChanged: (v) {
+          _gpsCoords = null;
+          coloniaController.text = v ?? '';
+        },
         validator: (v) => (v == null || v.isEmpty) ? 'Obligatorio' : null,
       ),
     );
@@ -493,20 +571,18 @@ class _AdminScreenState extends State<AdminScreen> {
 
                   if (context.mounted) {
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('Contraseña cambiada con exito'),
-                        backgroundColor: AppColors.success,
-                      ),
+                    showAppSnackBar(
+                      context,
+                      'Contraseña cambiada con éxito',
+                      kind: SnackKind.success,
                     );
                   }
                 } catch (e) {
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(e.toString()),
-                        backgroundColor: AppColors.danger,
-                      ),
+                    showAppSnackBar(
+                      context,
+                      e.toString().replaceAll('Exception: ', ''),
+                      kind: SnackKind.error,
                     );
                   }
                 }
@@ -579,11 +655,10 @@ class _AdminScreenState extends State<AdminScreen> {
                   }
                 } catch (e) {
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(e.toString()),
-                        backgroundColor: AppColors.danger,
-                      ),
+                    showAppSnackBar(
+                      context,
+                      e.toString().replaceAll('Exception: ', ''),
+                      kind: SnackKind.error,
                     );
                   }
                 }

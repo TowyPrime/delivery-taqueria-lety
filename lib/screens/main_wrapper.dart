@@ -1,11 +1,13 @@
 import 'package:delivery_app/components/custom_app_bar.dart';
 import 'package:delivery_app/providers/cart_provider.dart';
-import 'package:delivery_app/screens/admin_screen.dart';
+import 'package:delivery_app/screens/mis_datos_screen.dart';
 import 'package:delivery_app/screens/cart_screen.dart';
 import 'package:delivery_app/screens/chat_screen.dart';
 import 'package:delivery_app/screens/menu_screen.dart';
 import 'package:delivery_app/screens/notification_screen.dart';
 import 'package:delivery_app/screens/profile_screen.dart';
+import 'package:delivery_app/services/notification_service.dart';
+import 'package:delivery_app/services/push_service.dart';
 import 'package:delivery_app/theme/app_theme.dart';
 import 'package:delivery_app/screens/order_screen.dart';
 import 'package:flutter/material.dart';
@@ -21,6 +23,16 @@ class MainWrapper extends StatefulWidget {
 
 class _MainWrapperState extends State<MainWrapper> {
   int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      NotificationService.requestPermission();
+      PushService.init();
+    });
+  }
 
   //Metodo para cambiar de pestaña
   void _onTabTapped(int index) {
@@ -41,7 +53,7 @@ class _MainWrapperState extends State<MainWrapper> {
       MenuScreen(onGoToCart: () => _onTabTapped(2)),
       CartScreen(onGoToMenu: () => _onTabTapped(1)),
       const OrderScreen(),
-      const AdminScreen(),
+      const MisDatosScreen(),
       const NotificationScreen(),
       ProfileScreen(
         onbackToHome: () => _onTabTapped(0),

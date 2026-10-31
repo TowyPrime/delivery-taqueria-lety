@@ -5,22 +5,17 @@ import 'package:delivery_app/theme/app_theme.dart';
 import 'package:delivery_app/models/product_model.dart';
 import 'package:delivery_app/models/plate_model.dart';
 import 'package:delivery_app/providers/cart_provider.dart';
-import 'package:delivery_app/providers/order_provider.dart'; // <--- Import del OrderProvider
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 class BuildPlateScreen extends StatefulWidget {
   final String initialProductId;
   final int initialProductQuantity;
-  final String? orderIdToModify; 
-  final Map<String, dynamic>? currentOrderData; 
 
   const BuildPlateScreen({
     super.key,
     required this.initialProductId,
     required this.initialProductQuantity,
-    this.orderIdToModify,
-    this.currentOrderData,
   });
 
   @override
@@ -83,7 +78,6 @@ class _BuildPlateScreenState extends State<BuildPlateScreen> {
 
   Future<void> _addPlateToCart(List<ProductModel> availableProducts) async {
     if (_totalProductsInPlate == 0) return;
-    
 
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
     final List<PlateItem> plateProducts = [];
@@ -95,83 +89,29 @@ class _BuildPlateScreenState extends State<BuildPlateScreen> {
 
     final double platePrice = _currentPlatePrice(availableProducts);
 
-    
-    if (widget.orderIdToModify != null && widget.currentOrderData != null) {
-      try {
-        final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    // Flujo tradicional: Guardar en el carrito local
+    final newPlate = PlateModel(
+      id: 'Plate_${DateTime.now().microsecondsSinceEpoch}',
+      name: 'Plato ${cartProvider.numberPlates}',
+      price: platePrice,
+      products: plateProducts,
+    );
 
-        List<dynamic> currentItems = List.from(widget.currentOrderData!['items'] ?? []);
-        double currentTotal = (widget.currentOrderData!['total'] ?? 0.0).toDouble();
+    cartProvider.addPlate(newPlate);
 
-        // Convertimos el plato a la estructura de Map para Firestore
-        currentItems.add({
-          'id': 'plate_${DateTime.now().millisecondsSinceEpoch}',
-          'name': 'Plato ${cartProvider.numberPlates}',
-          'price': platePrice,
-          'quantity': 1,
-          'isPlate': true,
-          'details': plateProducts.map((item) => {
-            'name': item.product.name,
-            'quantity': item.quantity,
-          }).toList(),
-        });
-
-        double newTotal = currentTotal + platePrice;
-
-        await orderProvider.updateOrderContent(
-          widget.orderIdToModify!,
-          currentItems,
-          newTotal,
-        );
-
-        if (mounted) {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Plato agregado al pedido activo'),
-              backgroundColor: AppColors.success,
-            ),
-          );
-
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error al agregar plato al pedido: $e'),
-              backgroundColor: AppColors.danger,
-            ),
-          );
-        }
-      }
-    } else {
-      // Flujo tradicional: Guardar en el carrito local
-      final newPlate = PlateModel(
-        id: 'Plate_${DateTime.now().microsecondsSinceEpoch}',
-        name: 'Plato ${cartProvider.numberPlates}',
-        price: platePrice,
-        products: plateProducts,
-      );
-
-      cartProvider.addPlate(newPlate);
-
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Plato agregado al carrito'),
-          backgroundColor: AppColors.success,
-        ),
-      );
-    }
+    Navigator.pop(context);
+    showAppSnackBar(
+      context,
+      'Plato agregado al carrito',
+      kind: SnackKind.success,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool modifyingOrder = widget.orderIdToModify != null;
-
     return Scaffold(
       appBar: CustomAppBar(
-        title: modifyingOrder ? 'Arma tu plato para el pedido' : 'Arma tu plato',
+        title: 'Arma tu plato',
         centerTitle: true,
         showBackButton: true,
       ),
@@ -213,9 +153,6 @@ class _BuildPlateScreenState extends State<BuildPlateScreen> {
           }
 
           final double platePrice = _currentPlatePrice(tacoProducts);
-          final String ctaLabel = modifyingOrder
-              ? 'Agregar plato al pedido'
-              : 'Agregar plato al carrito';
 
           return Column(
             children: [
@@ -377,7 +314,7 @@ class _BuildPlateScreenState extends State<BuildPlateScreen> {
                     child: Text(
                       _totalProductsInPlate == 0
                           ? 'Agrega al menos un producto'
-                          : '$ctaLabel · ${formatMoney(platePrice)}',
+                          : 'Agregar plato al carrito · ${formatMoney(platePrice)}',
                     ),
                   ),
                 ),

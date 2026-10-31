@@ -66,7 +66,10 @@ class ScreenHomeColumn extends StatelessWidget {
           query: FirebaseFirestore.instance
               .collection('products')
               .where('isPackage', isEqualTo: true),
+          cardWith: 270,
+          carouseHeight: 300,
           onGotoCart: onGotoCart,
+          imageHeight: 150,
         ),
 
         const SizedBox(height: 24),
@@ -77,9 +80,12 @@ class ScreenHomeColumn extends StatelessWidget {
           query: FirebaseFirestore.instance
               .collection('products')
               .where('isFeatured', isEqualTo: true),
+          cardWith: 186,
+          carouseHeight: 268,
           onGotoCart: onGotoCart,
           onSeeAll: onGoToMenu,
           isFeatured: true,
+          imageHeight: 120,
         ),
       ],
     );
@@ -94,9 +100,13 @@ class _WelcomeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String firstName =
-        (authProvider.user?.displayName ?? '').trim().split(' ').first;
-    final String greeting = firstName.isNotEmpty ? '¡Hola, $firstName!' : '¡Hola!';
+    final String firstName = (authProvider.user?.displayName ?? '')
+        .trim()
+        .split(' ')
+        .first;
+    final String greeting = firstName.isNotEmpty
+        ? '¡Hola, $firstName!'
+        : '¡Hola!';
 
     return Container(
       width: double.infinity,

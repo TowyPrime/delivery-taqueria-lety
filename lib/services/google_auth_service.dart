@@ -25,8 +25,6 @@ class GoogleAuthService {
       onError: _handleAuthenticationError,
     );
 
-    await _googleSignIn.attemptLightweightAuthentication();
-
     _initialized = true;
   }
 

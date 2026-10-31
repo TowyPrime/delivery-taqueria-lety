@@ -36,12 +36,28 @@ class PrivacyPolicyDialog extends StatelessWidget {
                 texto: 'Correo electrónico para confirmaciones y recibos.',
               ),
               _ItemDato(
+                icon: Icons.phone_outlined,
+                texto: 'Teléfono para contactarte sobre tu entrega.',
+              ),
+              _ItemDato(
                 icon: Icons.home_outlined,
                 texto: 'Dirección de entrega para calcular cobertura y envíos.',
               ),
+              _ItemDato(
+                icon: Icons.my_location_outlined,
+                texto:
+                    'Tu ubicación, solo si pulsas "Usar mi ubicación", para llenar tu dirección.',
+              ),
+              _ItemDato(
+                icon: Icons.notifications_outlined,
+                texto:
+                    'Un identificador de tu teléfono para avisarte del estado de tu pedido.',
+              ),
               SizedBox(height: 12),
               Text(
-                'Tus datos están protegidos y únicamente se utilizarán para la gestión y entrega de tus pedidos.',
+                'Tus datos están protegidos y únicamente se utilizarán para la gestión y entrega de tus pedidos. '
+                'El pago lo procesa Stripe: nosotros no guardamos los datos de tu tarjeta. '
+                'Puedes eliminar tu cuenta en cualquier momento desde "Mis datos".',
                 style: TextStyle(fontSize: 12.5),
               ),
             ],

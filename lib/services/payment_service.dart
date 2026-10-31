@@ -1,54 +1,87 @@
-import 'package:delivery_app/theme/app_theme.dart';
-import 'package:flutter/material.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:delivery_app/providers/cart_provider.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 
-/// Resultado de un cobro.
-class PaymentResult {
-  final bool success;
+enum CheckoutStatus { paid, cancelled, failed }
 
-  /// Id del PaymentIntent de Stripe (para reembolsos). Es null si el cobro
-  /// falló o si fue simulado, porque un cobro simulado no tiene id real.
-  final String? paymentIntentId;
+class CheckoutResult {
+  final CheckoutStatus status;
+  final String? orderId;
+  final String? message;
 
-  const PaymentResult({required this.success, this.paymentIntentId});
-
-  const PaymentResult.failed() : this(success: false);
+  const CheckoutResult(this.status, {this.orderId, this.message});
 }
 
 class PaymentService {
   PaymentService._();
 
-  static Future<PaymentResult> makePayment({
-    required BuildContext context,
-    required double totalAmount,
-    String currency = 'MXN',
-    bool shouldSuccess = true, // cambiar a falso para simular error
-  }) async {
-    try {
-      //Simulación de retraso de red
-      await Future.delayed(const Duration(seconds: 2));
-
-      //Evaluación de resultado simulado
-      if (shouldSuccess) {
-        debugPrint('Simulación: Pago exitoso por \$$totalAmount $currency');
-        // TODO(stripe): con Stripe real, devolver aquí el id del PaymentIntent.
-        return const PaymentResult(success: true);
-      } else {
-        // Simulamos un error típico de Stripe (ej. Tarjeta rechazada)
-        throw Exception(
-          'La tarjeta de prueba fue rechazada. Fondos insuficientes.',
-        );
+  /// Solo mandamos ids y cantidades: los precios los calcula el servidor.
+  static List<Map<String, dynamic>> _buildItems(CartProvider cart) {
+    return cart.items.values.map((item) {
+      if (item.product != null) {
+        return {
+          'type': 'individual',
+          'productId': item.product!.id,
+          'quantity': item.quantity,
+        };
       }
-    } catch (e) {
-      debugPrint('Simulación de Error: $e');
-      if (context.mounted) {
-        _showErrorSnackBar(context, e.toString().replaceAll('Exception: ', ''));
-      }
-      return const PaymentResult.failed();
-    }
+      return {
+        'type': 'plato',
+        'quantity': item.quantity,
+        'products': item.plato!.products
+            .map((p) => {'productId': p.product.id, 'quantity': p.quantity})
+            .toList(),
+      };
+    }).toList();
   }
 
-  static void _showErrorSnackBar(BuildContext context, String message) {
-    if (!context.mounted) return;
-    showAppSnackBar(context, message, kind: SnackKind.error);
+  static Future<CheckoutResult> checkout(CartProvider cart) async {
+    try {
+      // 1. El servidor valida, calcula el total y crea el pedido y el cobro
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'createCheckout',
+      );
+      final response = await callable.call({'items': _buildItems(cart)});
+      final data = Map<String, dynamic>.from(response.data as Map);
+
+      // 2. Payment Sheet de Stripe
+      await Stripe.instance.initPaymentSheet(
+        paymentSheetParameters: SetupPaymentSheetParameters(
+          paymentIntentClientSecret: data['clientSecret'] as String,
+          merchantDisplayName: 'Taquería Lety',
+        ),
+      );
+      await Stripe.instance.presentPaymentSheet();
+
+      return CheckoutResult(
+        CheckoutStatus.paid,
+        orderId: data['orderId'] as String,
+      );
+    } on FirebaseFunctionsException catch (e) {
+      // Mensajes de zona, dirección o producto: ya vienen en español
+      return CheckoutResult(
+        CheckoutStatus.failed,
+        message: e.message ?? 'No pudimos iniciar el pago',
+      );
+    } on StripeException catch (e) {
+      debugPrint(
+        'StripeException: code=${e.error.code} type=${e.error.type} '
+        'message=${e.error.message} localized=${e.error.localizedMessage}',
+      );
+      if (e.error.code == FailureCode.Canceled) {
+        return const CheckoutResult(CheckoutStatus.cancelled);
+      }
+      return CheckoutResult(
+        CheckoutStatus.failed,
+        message: e.error.localizedMessage ?? 'El pago no se completó',
+      );
+    } catch (e) {
+      debugPrint('Error en checkout: $e');
+      return const CheckoutResult(
+        CheckoutStatus.failed,
+        message: 'Ocurrió un error inesperado. Intenta de nuevo.',
+      );
+    }
   }
 }

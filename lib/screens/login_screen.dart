@@ -194,7 +194,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Center(child: BrandLogo(size: 132, bordered: true)),
+                  const Center(child: BrandLogo(size: 100, bordered: true)),
                   const SizedBox(height: 20),
                   const Text(
                     'Taquería Lety',

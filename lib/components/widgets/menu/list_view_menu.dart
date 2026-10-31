@@ -1,15 +1,12 @@
 import 'package:delivery_app/components/widgets/app_widgets.dart';
+import 'package:delivery_app/components/widgets/menu/package_detail_sheet.dart';
 import 'package:delivery_app/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:delivery_app/models/product_model.dart';
-import 'package:provider/provider.dart';
 import 'package:delivery_app/providers/cart_provider.dart';
-import 'package:delivery_app/providers/order_provider.dart';
 import 'package:delivery_app/screens/build_plate_screen.dart';
 
 class ListViewMenu extends StatelessWidget {
-  final String? orderIdToModify;
-  final Map<String, dynamic>? currentOrderData;
   final VoidCallback? onGoToCart;
 
   const ListViewMenu({
@@ -17,8 +14,6 @@ class ListViewMenu extends StatelessWidget {
     required this.filteredProducts,
     required this.cartProvider,
     required this.allProducts,
-    this.orderIdToModify,
-    this.currentOrderData,
     this.onGoToCart,
   });
 
@@ -39,8 +34,6 @@ class ListViewMenu extends StatelessWidget {
           context: context,
           product: product,
           cartProvider: cartProvider,
-          orderIdToModify: orderIdToModify,
-          currentOrderData: currentOrderData,
           onGoToCart: onGoToCart,
         );
 
@@ -117,12 +110,20 @@ void handleProductSelection({
   required BuildContext context,
   required ProductModel product,
   required CartProvider cartProvider,
-  String? orderIdToModify,
-  Map<String, dynamic>? currentOrderData,
   VoidCallback? onGoToCart,
 }) {
   final category = product.category.toLowerCase();
-
+  if (product.isPackage) {
+    showPackageDetailSheet(
+      context,
+      product: product,
+      onAdd: (int quantity) {
+        cartProvider.addProduct(product, quantity);
+        _showAddedSnackBar(context, product.name, onGoToCart);
+      },
+    );
+    return;
+  }
   if (category == 'tacos') {
     // Los tacos siempre van dentro de un plato: pedimos cantidad y armamos el plato.
     _showQuantityDialog(
@@ -144,32 +145,15 @@ void handleProductSelection({
       },
     );
   } else if (category == 'orden') {
-    _showOrderDialog(
-      context,
-      product,
-      cartProvider,
-      orderIdToModify,
-      currentOrderData,
-      onGoToCart,
-    );
+    _showOrderDialog(context, product, cartProvider, onGoToCart);
   } else {
     _showQuantityDialog(
       context,
       product: product,
       confirmLabel: 'Agregar',
       onConfirm: (quantity) async {
-        if (orderIdToModify != null && currentOrderData != null) {
-          await _executeOrderModification(
-            context,
-            orderIdToModify,
-            currentOrderData,
-            product,
-            quantity,
-          );
-        } else {
-          cartProvider.addProduct(product, quantity);
-          _showAddedSnackBar(context, product.name, onGoToCart);
-        }
+        cartProvider.addProduct(product, quantity);
+        _showAddedSnackBar(context, product.name, onGoToCart);
       },
     );
   }
@@ -264,8 +248,6 @@ void _showOrderDialog(
   BuildContext context,
   ProductModel product,
   CartProvider cartProvider,
-  String? orderIdToModify,
-  Map<String, dynamic>? currentOrderData,
   VoidCallback? onGoToCart,
 ) {
   final int quantity = 1;
@@ -288,18 +270,9 @@ void _showOrderDialog(
             style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
             onPressed: () async {
               Navigator.pop(dialogContext);
-              if (orderIdToModify != null && currentOrderData != null) {
-                await _executeOrderModification(
-                  context,
-                  orderIdToModify,
-                  currentOrderData,
-                  product,
-                  quantity,
-                );
-              } else {
-                cartProvider.addProduct(product, quantity);
-                _showAddedSnackBar(context, product.name, onGoToCart);
-              }
+
+              cartProvider.addProduct(product, quantity);
+              _showAddedSnackBar(context, product.name, onGoToCart);
             },
             child: const Text('Agregar'),
           ),
@@ -325,7 +298,11 @@ class _InfoNote extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.info_outline_rounded, color: AppColors.warning, size: 20),
+          const Icon(
+            Icons.info_outline_rounded,
+            color: AppColors.warning,
+            size: 20,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -340,60 +317,5 @@ class _InfoNote extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-Future<void> _executeOrderModification(
-  BuildContext context,
-  String orderId,
-  Map<String, dynamic> currentOrderData,
-  ProductModel product,
-  int quantity,
-) async {
-  try {
-    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-
-    //Extrer lista de productos original
-    List<dynamic> currentItems = List.from(currentOrderData['items'] ?? []);
-    double currentTotal = (currentOrderData['total'] ?? 0.0).toDouble();
-
-    //Si el producto ya existe
-    int existingIndex = currentItems.indexWhere(
-      (item) => item['id'] == product.id,
-    );
-
-    if (existingIndex != -1) {
-      int oldQty = currentItems[existingIndex]['quantity'] ?? 1;
-      currentItems[existingIndex]['quantity'] = oldQty + quantity;
-    } else {
-      currentItems.add({
-        'id': product.id,
-        'name': product.name,
-        'price': product.price,
-        'quantity': quantity,
-      });
-    }
-
-    double extraCost = product.price * quantity;
-    double newTotal = currentTotal + extraCost;
-
-    await orderProvider.updateOrderContent(orderId, currentItems, newTotal);
-
-    if (context.mounted) {
-      showAppSnackBar(
-        context,
-        '${product.name} agregado directamente a la orden activa',
-        kind: SnackKind.success,
-      );
-      Navigator.pop(context);
-    }
-  } catch (e) {
-    if (context.mounted) {
-      showAppSnackBar(
-        context,
-        'Error al modificar el pedido: $e',
-        kind: SnackKind.error,
-      );
-    }
   }
 }

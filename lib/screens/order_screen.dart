@@ -49,10 +49,19 @@ class OrderScreen extends StatelessWidget {
           );
         }
 
-        final docs = snapshot.data?.docs ?? [];
+        final allDocs = snapshot.data?.docs ?? [];
+        final docs = allDocs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          return data['status'] != 'pendiente_pago';
+        }).toList();
 
         return SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, AppSpacing.fabClearance),
+          padding: const EdgeInsets.fromLTRB(
+            16,
+            8,
+            16,
+            AppSpacing.fabClearance,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -114,17 +123,7 @@ class OrderScreen extends StatelessWidget {
                         onTap: () {
                           final docId = docs[index].id;
 
-                          bool isEditable =
-                              status != 'en preparación' &&
-                              status != 'en camino' &&
-                              status != 'entregado';
-
-                          _goToOrderDetailScreen(
-                            context,
-                            docId,
-                            order,
-                            isEditable,
-                          );
+                          _goToOrderDetailScreen(context, docId, order);
                         },
                         child: Padding(
                           padding: const EdgeInsets.all(14),
@@ -227,18 +226,14 @@ class OrderScreen extends StatelessWidget {
     BuildContext context,
     String orderId,
     Map<String, dynamic> orderData,
-    bool isEditable,
   ) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       showDragHandle: false,
       backgroundColor: Colors.transparent,
-      builder: (context) => OrderDetailWidget(
-        orderId: orderId,
-        orderData: orderData,
-        isEditable: isEditable,
-      ),
+      builder: (context) =>
+          OrderDetailWidget(orderId: orderId, orderData: orderData),
     );
   }
 }

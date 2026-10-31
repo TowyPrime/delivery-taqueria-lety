@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -43,21 +44,75 @@ class DeliveryZoneService {
   ) async {
     String campo(String k) => (direccion[k] ?? '').toString().trim();
 
-    final partes = [
-      '${campo('calle')} ${campo('numero_exterior')}'.trim(),
-      campo('colonia'),
-      campo('codigo_postal'),
-      campo('ciudad'),
-      'México',
-    ].where((p) => p.isNotEmpty).join(', ');
+    final calle = '${campo('calle')} ${campo('numero_exterior')}'.trim();
+    final cp = campo('codigo_postal');
+    final colonia = campo('colonia');
+    final ciudad = campo('ciudad');
 
-    try {
-      final results = await locationFromAddress(partes);
-      if (results.isEmpty) return null;
-      return (lat: results.first.latitude, lng: results.first.longitude);
-    } catch (_) {
-      return null;
+    // De la más precisa a la menos precisa
+    final intentos = <List<String>>[
+      [calle, colonia, cp, ciudad, 'México'],
+      [calle, cp, ciudad, 'México'],
+      [cp, ciudad, 'México'],
+    ].map((p) => p.where((e) => e.isNotEmpty).join(', ')).toList();
+
+    for (final texto in intentos) {
+      try {
+        final results = await locationFromAddress(texto);
+        if (results.isNotEmpty) {
+          debugPrint('Geocodificado con "$texto"');
+          return (lat: results.first.latitude, lng: results.first.longitude);
+        }
+        debugPrint('Geocoding sin resultados con "$texto"');
+      } catch (e) {
+        debugPrint('Geocoding falló con "$texto": $e');
+      }
     }
+    return null;
+  }
+
+  /// Pide permiso, lee el GPS y lo convierte en dirección.
+  /// Lanza [LocationException] con un mensaje listo para mostrar.
+  Future<({double lat, double lng, Map<String, String> direccion})>
+  currentLocationAddress() async {
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      throw const LocationException('Activa la ubicación de tu teléfono.');
+    }
+
+    var permiso = await Geolocator.checkPermission();
+    if (permiso == LocationPermission.denied) {
+      permiso = await Geolocator.requestPermission();
+    }
+    if (permiso == LocationPermission.denied) {
+      throw const LocationException('Necesitamos el permiso de ubicación.');
+    }
+    if (permiso == LocationPermission.deniedForever) {
+      throw const LocationException(
+        'Permiso de ubicación bloqueado. Actívalo en los ajustes de la app.',
+      );
+    }
+
+    final pos = await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 15),
+      ),
+    );
+
+    final marcas = await placemarkFromCoordinates(pos.latitude, pos.longitude);
+    final m = marcas.isNotEmpty ? marcas.first : null;
+
+    return (
+      lat: pos.latitude,
+      lng: pos.longitude,
+      direccion: {
+        'calle': m?.thoroughfare ?? '',
+        'numero_exterior': m?.subThoroughfare ?? '',
+        'codigo_postal': m?.postalCode ?? '',
+        'colonia': m?.subLocality ?? '',
+        'ciudad': m?.locality ?? '',
+      },
+    );
   }
 
   /// Revisa si unas coordenadas caen dentro del radio de reparto.
@@ -81,4 +136,9 @@ class DeliveryZoneService {
     if (coords == null) return null;
     return checkCoordinates(coords.lat, coords.lng);
   }
+}
+
+class LocationException implements Exception {
+  final String message;
+  const LocationException(this.message);
 }

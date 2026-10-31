@@ -1,14 +1,12 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:delivery_app/models/order_model.dart';
-import 'package:delivery_app/services/notification_service.dart';
 
 class OrderProvider with ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   final Map<String, String> _lastViewedStatuses = {};
-
-  final Map<String, String> _lastNotifiedStatuses = {};
 
   void markStatusAsRead(String orderId, String currentStatus) {
     _lastViewedStatuses[orderId] = currentStatus;
@@ -22,7 +20,7 @@ class OrderProvider with ChangeNotifier {
       final orderId = order.id;
       final currentStatus = order.status;
 
-      //Si el pedido es nuevo
+      // Si el pedido es nuevo
       if (!_lastViewedStatuses.containsKey(orderId) ||
           _lastViewedStatuses[orderId] != currentStatus) {
         return true;
@@ -31,44 +29,18 @@ class OrderProvider with ChangeNotifier {
     return false;
   }
 
-  //Estado de carga
-  List<OrderModel> _userOrders = [];
-  bool _isLoading = false;
+  // Estado de carga
+  final _isLoading = false;
 
-  List<OrderModel> get userOrders => _userOrders;
   bool get isLoading => _isLoading;
 
-  //Escuchar pedidos en tiempo real
+  // Escuchar pedidos en tiempo real
   Stream<OrderModel> streamOrder(String orderId) {
     return _firestore
         .collection('orders')
         .doc(orderId)
         .snapshots()
         .map((snapshot) => OrderModel.fromFirestore(snapshot));
-  }
-
-  //Traer pedidos de usuario
-  Future<void> fetchUserOrders(String userId) async {
-    _isLoading = true;
-    notifyListeners();
-
-    try {
-      final querySnapshot = await _firestore
-          .collection('orders')
-          .where('userId', isEqualTo: userId)
-          .orderBy('createdAt', descending: true)
-          .limit(1) // Los más recientes primero
-          .get();
-      _userOrders = querySnapshot.docs
-          .map((doc) => OrderModel.fromFirestore(doc))
-          .toList();
-    } catch (e) {
-      debugPrint('Error: $e');
-      rethrow;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
   }
 
   /// Consulta única de TODOS los pedidos en curso del usuario (sin notificar
@@ -90,62 +62,29 @@ class OrderProvider with ChangeNotifier {
     return _firestore
         .collection('orders')
         .where('userId', isEqualTo: userId)
-        .where('status', whereIn: ['pendiente', 'preparando', 'en camino'])
+        .where(
+          'status',
+          whereIn: ['pendiente', 'en preparación', 'preparando', 'en camino'],
+        )
         .orderBy('createdAt', descending: true)
-        .limit(1)
         .snapshots()
-        .map((snapshot) {
-          final orders = snapshot.docs
+        .map(
+          (snapshot) => snapshot.docs
               .map((doc) => OrderModel.fromFirestore(doc))
-              .toList();
-
-          for (var order in orders) {
-            final orderId = order.id;
-            final currentStatus = order.status;
-
-            if (!_lastNotifiedStatuses.containsKey(orderId) ||
-                _lastNotifiedStatuses[orderId] != currentStatus) {
-              NotificationService.showNotification(
-                id: orderId.hashCode,
-                title: 'Actualización de pedido',
-                body: 'El estado de tu pedido ha cambiado a: $currentStatus',
-              );
-              _lastNotifiedStatuses[orderId] = currentStatus;
-            }
-          }
-
-          return orders;
-        });
+              .toList(),
+        );
   }
 
-  //modificar el contenido del pedido
-  Future<void> updateOrderContent(
-    String orderId,
-    List<dynamic> updateItems,
-    double newTotal,
-  ) async {
-    try {
-      await _firestore.collection('orders').doc(orderId).update({
-        'items': updateItems,
-        'total': newTotal,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-      notifyListeners();
-    } catch (e) {
-      debugPrint('Error al actualizar el pedido: $e');
-      rethrow;
-    }
-  }
-
-  //Cancelar  un pedido
+  // Cancelar un pedido
   Future<void> cancelOrder(String orderId) async {
     try {
-      await _firestore.collection('orders').doc(orderId).update({
-        'status': 'cancelado',
-      });
-    } catch (e) {
-      debugPrint('Error al cancelar pedido: $e');
-      rethrow;
+      final callable = FirebaseFunctions.instance.httpsCallable('cancelOrder');
+      await callable.call({'orderId': orderId});
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint(
+        'Error de Firebase Functions al cancelar pedido: ${e.message}',
+      );
+      throw Exception(e.message ?? "No se pudo cancelar el pedido");
     }
   }
 }

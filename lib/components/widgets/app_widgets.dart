@@ -14,12 +14,11 @@ class BrandLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(size * 0.24);
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        borderRadius: radius,
+        shape: BoxShape.circle,
         border: bordered ? Border.all(color: AppColors.border, width: 2) : null,
         boxShadow: bordered
             ? [
@@ -31,10 +30,9 @@ class BrandLogo extends StatelessWidget {
               ]
             : null,
       ),
-      child: ClipRRect(
-        borderRadius: radius,
+      child: ClipOval(
         child: Image.asset(
-          'assets/ic_logo.jpg',
+          'assets/ic_logo_round.png',
           fit: BoxFit.cover,
           errorBuilder: (_, _, _) => Container(
             color: AppColors.primarySoft,
